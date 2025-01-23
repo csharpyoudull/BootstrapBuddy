@@ -1,0 +1,106 @@
+﻿@page "/"
+@inject IJSRuntime Js
+@using BootstrapBuddy.Agent
+@using BootstrapBuddy.Models
+<PageTitle>Bootstrap Buddy</PageTitle>
+<script>
+    window.scrollToBottom = (elementId) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+    element.scrollTop = element.scrollHeight;
+    }
+    };
+</script>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col m-4">
+            <div class="row">
+                <div class="w-100 border border-secondary rounded p-2 col" style="height: 800px; overflow-y: auto;">
+                    @foreach (var message in _messages)
+                    {
+                        <div class="col-10 @(message.FromAgent ? "float-start":"float-end")" style="margin-bottom: 8px;">
+                            <div class="p-2 d-flex align-items-start rounded @(message.FromAgent ? "bg-info" : "border border-secondary")">
+                                <div class="badge bg-dark" style="margin-right: 6px">
+                                    @(message.FromAgent ? "Agent" : "User")
+                                </div>
+                                <div class="text-wrap">
+                                    @message.Text
+                                </div>
+                            </div>
+                        </div>
+                        <div class="clearfix"></div>
+                    }
+                </div>
+            </div>
+            <div class="row mt-2">
+                <textarea @bind="MessageText" class="rounded form-control"></textarea>
+            </div>
+            <div class="row mt-2">
+                <button @onclick="SendMessage" class="btn btn-primary">Send</button>
+            </div>
+
+        </div>
+        <div class="col m-4 p-4 border rounded w-100 h-100">
+            @if (_htmlContent != null)
+            {
+                @_htmlContent
+            }
+            @if (Buddy.GeneratingHtml)
+            {
+                <div>
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+
+    private string MessageText { get; set; } = string.Empty;
+    private MarkupString? _htmlContent;
+    private List<Message> _messages = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Buddy.OnHtmlReady = (message) =>
+            {
+                InvokeAsync(async () =>
+                {
+                    _htmlContent = new (message);
+                    StateHasChanged();
+                    
+                    await Js.InvokeVoidAsync("scrollToBottom", "scrollableDiv");
+                });
+                
+            };
+
+            Buddy.OnChatMessage = async void (message) =>
+            {
+                _messages.Add(new Message { FromAgent = true, Text = message });
+                
+                await Js.InvokeVoidAsync("scrollToBottom", "scrollableDiv");
+                StateHasChanged();
+            };
+            _messages.Add(new Message { FromAgent = true, Text = "Welcome, I'm buddy the bootstrap form building agent, how can I help you build a form today?" });
+            StateHasChanged();
+        }
+        
+        await Js.InvokeVoidAsync("scrollToBottom", "scrollableDiv");
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task SendMessage()
+    {
+        var newMessage = new Message { Text = MessageText };
+        _messages.Add(newMessage);
+        MessageText = string.Empty;
+
+        await Buddy.ChatAsync(newMessage.Text);
+    }
+
+}
